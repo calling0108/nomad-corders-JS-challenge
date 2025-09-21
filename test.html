@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Dashboard - Clock / Login / Todo / Weather</title>
+  <style>
+    :root {
+      --card-bg: rgba(255,255,255,0.85);
+      --accent: #2b8cff;
+      --text: #222;
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      font-family: "Segoe UI", Roboto, "Noto Sans KR", Arial;
+      color:var(--text);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background-size:cover;
+      background-position:center;
+      transition: background 0.6s ease;
+    }
+    .wrap {
+      width:min(980px, 94%);
+      max-width:980px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.8));
+      border-radius:12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      padding:20px;
+      display:grid;
+      grid-template-columns: 1fr 320px;
+      gap:20px;
+      align-items:start;
+    }
+    header { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .clock { font-size:28px; font-weight:700; }
+    .subtitle { font-size:14px; color:#444; }
+    /* left column */
+    .left { padding:10px; }
+    .card { background:var(--card-bg); border-radius:10px; padding:14px; margin-bottom:14px; }
+    .login-row { display:flex; gap:8px; align-items:center; }
+    input[type="text"], input[type="number"] { padding:8px; border-radius:6px; border:1px solid #ddd; width:100%; }
+    button { background:var(--accent); color:#fff; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+    /* todo */
+    .todo-list { list-style:none; padding:0; margin:0; max-height:260px; overflow:auto; }
+    .todo-item { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px; border-radius:8px; margin-bottom:8px; background:rgba(0,0,0,0.03); }
+    .todo-item.done { text-decoration: line-through; opacity:0.6; }
+    .todo-controls { display:flex; gap:6px; }
+    /* right column */
+    .right { padding:10px; min-width:280px; }
+    .weather { display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+    .small { font-size:13px; color:#444; }
+    footer { grid-column:1 / -1; text-align:center; font-size:12px; color:#333; opacity:0.8; margin-top:6px; }
+    @media (max-width:880px){
+      .wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <header>
+      <div>
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="subtitle">Time — Real-time clock</div>
+      </div>
+      <div id="greetArea">
+        <!-- login UI rendered here -->
+      </div>
+    </header>
+
+    <section class="left">
+      <div class="card">
+        <h3>Login (LocalStorage)</h3>
+        <div id="loginCard">
+          <div class="login-row">
+            <input type="text" id="nameInput" placeholder="Enter your name" />
+            <button id="loginBtn">Login</button>
+          </div>
+        </div>
+        <div id="welcome" style="display:none; margin-top:10px;">
+          <div id="greetingText" style="font-weight:700"></div>
+          <div style="margin-top:8px;">
+            <button id="logoutBtn" class="ghost">Logout</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Todo List (LocalStorage)</h3>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <input type="text" id="todoInput" placeholder="Add a new todo" />
+          <button id="addTodoBtn">Add</button>
+        </div>
+        <ul class="todo-list" id="todoList"></ul>
+        <div style="margin-top:8px;">
+          <button id="clearDone" class="ghost">Clear Completed</button>
+          <button id="clearAll" class="ghost">Clear All</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div class="card weather">
+        <h3>Weather & Location</h3>
+        <div id="locationText" class="small">Location: —</div>
+        <div id="weatherText" class="small">Weather: —</div>
+        <div id="tempText" style="font-weight:700; font-size:20px;">—</div>
+        <div id="weatherNote" class="small">Weather data from OpenWeatherMap</div>
+        <div style="margin-top:8px;">
+          <button id="refreshWeather" class="ghost">Refresh Weather</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Random Background</h3>
+        <div class="small">Click to get a new random background image</div>
+        <div style="margin-top:10px;">
+          <button id="randomBgBtn">New Background</button>
+        </div>
+      </div>
+    </aside>
+
+    <footer>Single-file demo • Deploy this index.html to GitHub Pages</footer>
+  </div>
+
+  <script>
+    // ========== CONFIG ==========
+    // OpenWeatherMap API key: 발급받아 여기에 넣으세요.
+    const OPENWEATHER_API_KEY = "YOUR_OPENWEATHER_API_KEY_HERE";
+
+    // ========== Clock ==========
+    const clockEl = document.getElementById("clock");
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2,"0");
+      const m = String(now.getMinutes()).padStart(2,"0");
+      const s = String(now.getSeconds()).padStart(2,"0");
+      clockEl.textContent = `${h}:${m}:${s}`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // ========== Random Background ==========
+    const randomBgBtn = document.getElementById("randomBgBtn");
+    function setRandomBackground() {
+      // Unsplash source without API key (query variety)
+      // add timestamp to force a fresh image
+      const queries = ["nature","city","mountain","ocean","forest","sunset","sky","space","abstract","landscape"];
+      const q = queries[Math.floor(Math.random()*queries.length)];
+      const url = `https://source.unsplash.com/1600x900/?${q}&sig=${Date.now()}`;
+      document.body.style.backgroundImage = `url("${url}")`;
+    }
+    // set initial random background
+    setRandomBackground();
+    randomBgBtn.addEventListener("click", setRandomBackground);
+
+    // ========== Login (LocalStorage) ==========
+    const loginBtn = document.getElementById("loginBtn");
+    const nameInput = document.getElementById("nameInput");
+    const welcomeBox = document.getElementById("welcome");
+    const loginCard = document.getElementById("loginCard");
+    const greetingText = document.getElementById("greetingText");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    const LS_NAME_KEY = "miniDash_username";
+
+    function showWelcome(name) {
+      loginCard.style.display = "none";
+      welcomeBox.style.display = "block";
+      greetingText.textContent = `Hello, ${name}!`;
+    }
+    function showLoginForm() {
+      loginCard.style.display = "block";
+      welcomeBox.style.display = "none";
+      nameInput.value = "";
+    }
+
+    // init
+    const savedName = localStorage.getItem(LS_NAME_KEY);
+    if (savedName) {
+      showWelcome(savedName);
+    }
+
+    loginBtn.addEventListener("click", () => {
+      const name = nameInput.value && nameInput.value.trim();
+      if (!name) return alert("이름을 입력하세요.");
+      localStorage.setItem(LS_NAME_KEY, name);
+      showWelcome(name);
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      localStorage.removeItem(LS_NAME_KEY);
+      showLoginForm();
+    });
+
+    // ========== Todo (LocalStorage) ==========
+    const todoInput = document.getElementById("todoInput");
+    const addTodoBtn = document.getElementById("addTodoBtn");
+    const todoListEl = document.getElementById("todoList");
+    const CLEAR_KEY = "miniDash_todos";
+
+    function loadTodos() {
+      const raw = localStorage.getItem(CLEAR_KEY);
+      if (!raw) return [];
+      try { return JSON.parse(raw) } catch(e){ return [] }
+    }
+    function saveTodos(todos) {
+      localStorage.setItem(CLEAR_KEY, JSON.stringify(todos));
+    }
+
+    let todos = loadTodos();
+
+    function renderTodos() {
+      todoListEl.innerHTML = "";
+      todos.forEach(item => {
+        const li = document.createElement("li");
+        li.className = "todo-item" + (item.done ? " done" : "");
+        li.dataset.id = item.id;
+
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.alignItems = "center";
+        left.style.gap = "10px";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!item.done;
+        cb.addEventListener("change", () => {
+          item.done = cb.checked;
+          saveTodos(todos);
+          renderTodos();
+        });
+
+        const span = document.createElement("div");
+        span.textContent = item.text;
+
+        left.appendChild(cb);
+        left.appendChild(span);
+
+        const controls = document.createElement("div");
+        controls.className = "todo-controls";
+
+        const del = document.createElement("button");
+        del.textContent = "Delete";
+        del.className = "ghost";
+        del.addEventListener("click", () => {
+          todos = todos.filter(t => t.id !== item.id);
+          saveTodos(todos);
+          renderTodos();
+        });
+
+        controls.appendChild(del);
+
+        li.appendChild(left);
+        li.appendChild(controls);
+        todoListEl.appendChild(li);
+      });
+    }
+
+    function addTodo(text) {
+      const newItem = { id: Date.now().toString(), text: text.trim(), done: false };
+      todos.unshift(newItem);
+      saveTodos(todos);
+      renderTodos();
+    }
+
+    addTodoBtn.addEventListener("click", () => {
+      const t = todoInput.value;
+      if (!t || !t.trim()) return;
+      addTodo(t);
+      todoInput.value = "";
+    });
+
+    todoInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addTodoBtn.click();
+    });
+
+    document.getElementById("clearDone").addEventListener("click", () => {
+      todos = todos.filter(t => !t.done);
+      saveTodos(todos);
+      renderTodos();
+    });
+    document.getElementById("clearAll").addEventListener("click", () => {
+      if (!confirm("Clear all todos?")) return;
+      todos = [];
+      saveTodos(todos);
+      renderTodos();
+    });
+
+    // initial render
+    renderTodos();
+
+    // ========== Weather (Geolocation + OpenWeatherMap) ==========
+    const locationText = document.getElementById("locationText");
+    const weatherText = document.getElementById("weatherText");
+    const tempText = document.getElementById("tempText");
+    const refreshWeatherBtn = document.getElementById("refreshWeather");
+
+    async function fetchWeatherByCoords(lat, lon) {
+      if (!OPENWEATHER_API_KEY || OPENWEATHER_API_KEY === "YOUR_OPENWEATHER_API_KEY_HERE") {
+        weatherText.textContent = "API key missing. Put OpenWeather API key in script.";
+        tempText.textContent = "";
+        return;
+      }
+      try {
+        const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`);
+        if (!res.ok) throw new Error("Weather fetch failed");
+        const data = await res.json();
+        const place = `${data.name || ""}${data.sys && data.sys.country ? ", "+data.sys.country : ""}`;
+        const desc = data.weather && data.weather[0] ? data.weather[0].description : "-";
+        const temp = data.main && data.main.temp ? Math.round(data.main.temp) : "-";
+        locationText.textContent = `Location: ${place}`;
+        weatherText.textContent = `Weather: ${desc}`;
+        tempText.textContent = `${temp} °C`;
+      } catch (e) {
+        weatherText.textContent = "Unable to fetch weather.";
+        tempText.textContent = "";
+        console.error(e);
+      }
+    }
+
+    function requestAndUpdateWeather() {
+      if (!navigator.geolocation) {
+        locationText.textContent = "Geolocation not supported.";
+        return;
+      }
+      locationText.textContent = "Getting location...";
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const { latitude, longitude } = pos.coords;
+        locationText.textContent = `Coords: ${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+        fetchWeatherByCoords(latitude, longitude);
+      }, (err) => {
+        locationText.textContent = "Permission denied or unavailable.";
+        weatherText.textContent = "";
+        tempText.textContent = "";
+        console.warn(err);
+      }, { timeout: 10000 });
+    }
+
+    // initial weather attempt
+    requestAndUpdateWeather();
+    refreshWeatherBtn.addEventListener("click", requestAndUpdateWeather);
+
+    // ========== Small UX: if user is logged in, show name at header ==========
+    const greetArea = document.getElementById("greetArea");
+    function renderHeaderName() {
+      const name = localStorage.getItem(LS_NAME_KEY);
+      if (name) {
+        greetArea.innerHTML = `<div style="font-weight:700">${name}</div>`;
+      } else {
+        greetArea.innerHTML = `<div style="color:#555">Not logged in</div>`;
+      }
+    }
+    renderHeaderName();
+
+    // update header greeting when login/logout
+    loginBtn.addEventListener("click", () => { setTimeout(renderHeaderName, 50); });
+    logoutBtn.addEventListener("click", renderHeaderName);
+
+    // ========== Accessibility: focus first input ==========
+    nameInput.focus();
+  </script>
+</body>
+</html>
